@@ -1,0 +1,4 @@
+/.idea
+node_modules
+openapi-ts-error*
+src/hey/
