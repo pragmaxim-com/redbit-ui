@@ -5,7 +5,7 @@ import { fetchSchema, SchemaMap } from './schema';
 import * as client from '../hey';
 
 const mockDefs: SchemaMap = {
-  StringObj: { type: 'object', properties: { foo: { type: 'string' } }, example: { foo: 'bar' } },
+  StringObj: { type: 'object', properties: { foo: { type: 'string' } }, examples: [{ foo: 'bar' }] },
   NumArr: { type: 'array', items: { type: 'number' }, examples: [[7, 8, 9]] },
 };
 
@@ -66,7 +66,7 @@ describe('inlinePaths unit tests', () => {
     expect(p.required).toBe(true);
     expect(p.schema.examples![0]).toBe('xyz');
     // requestBody undefined
-    expect(ep.requestBody).toBeUndefined();
+    expect(ep.paramDefs.filter(p => p.in === 'body').length).toBe(0);
     // response schema inlined
     expect(ep.responseBodies['200']).toBeDefined();
   });
@@ -94,9 +94,8 @@ describe('inlinePaths unit tests', () => {
     const ep = result.nums_post;
     expect(ep.heyClientMethodName).toBe('numsPost');
     // requestBody inlined
-    expect(ep.requestBody).toBeDefined();
-    expect(ep.requestBody!.schema).toEqual(mockDefs.NumArr);
-    expect(ep.requestBody!.schema.examples![0]).toEqual([7, 8, 9]);
+    expect(ep.paramDefs.filter(p => p.in === 'body')[0].schema).toEqual(mockDefs.NumArr);
+    expect(ep.paramDefs.filter(p => p.in === 'body')[0].schema.examples![0]).toEqual([7, 8, 9]);
     // responses
     expect(ep.responseBodies['201']?.mediaType).toBe('application/json');
     expect(ep.responseBodies['400']?.mediaType).toBe('application/json');
@@ -115,7 +114,7 @@ describe('inlinePaths unit tests', () => {
     const result = generateEndpoints(raw, mockDefs);
     const ep = result.simple_delete;
     expect(ep.paramDefs).toHaveLength(0);
-    expect(ep.requestBody).toBeUndefined();
+    expect(ep.paramDefs.filter(p => p.in === 'body').length).toBe(0);
     // 204 with no content => no responseSchemas entry
     expect(ep.responseBodies['204']).toBeUndefined();
   });
