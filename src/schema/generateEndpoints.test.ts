@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { OpenAPIV3_1 } from 'openapi-types';
-import { generateEndpoints, Endpoint, ParamDefinition } from './generateEndpoints';
+import { generateEndpoints, Endpoint, ParamDefinition, buildExampleEndpointParams } from './generateEndpoints';
 import { fetchSchema, SchemaMap } from './schema';
 import * as client from '../hey';
 
@@ -20,7 +20,8 @@ describe('Hey-API JSON client calls', () => {
   });
 
   realEndpoints.forEach(ep => {
-    for (const [title, param] of Object.entries(ep.exampleParams)) {
+    const exampleParams = buildExampleEndpointParams(ep.paramDefs, ep.streaming);
+    for (const [title, param] of Object.entries(exampleParams)) {
       it(`${ep.heyClientMethodName}(${title}) → ${ep.method} ${ep.path}`, async () => {
         const { data, response, error } = await (client as any)[ep.heyClientMethodName](param);
         if (response.status !== 200) {

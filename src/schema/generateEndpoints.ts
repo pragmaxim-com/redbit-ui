@@ -27,7 +27,6 @@ export interface Endpoint {
   method: HttpMethod;
   path: string;
   paramDefs: ParamDefinition[];
-  exampleParams: Record<string, Record<string, any>>;
   responseBodies: Record<string, ResponseBody | undefined>;
   streaming: boolean;
   tags: string[];
@@ -43,7 +42,7 @@ function toHttpMethod(raw: string): HttpMethod {
   throw new Error(`Unsupported HTTP method: ${raw}`);
 }
 
-function getResponseBody(r: OpenAPIV3_1.ResponseObject, defs: SchemaMap): ResponseBody {
+function buildResponseBody(r: OpenAPIV3_1.ResponseObject, defs: SchemaMap): ResponseBody {
   const content = r.content as Record<string, any>;
   if (!content) throw new Error('Response body must have content defined');
   const keys = Object.keys(content);
@@ -55,7 +54,7 @@ function getResponseBody(r: OpenAPIV3_1.ResponseObject, defs: SchemaMap): Respon
   return { mediaType, schema, streaming };
 }
 
-function getRequestBodyParam(r: OpenAPIV3_1.RequestBodyObject, defs: SchemaMap): ParamDefinition {
+function buildRequestBodyParamDef(r: OpenAPIV3_1.RequestBodyObject, defs: SchemaMap): ParamDefinition {
   const content = r.content as Record<string, any>;
   const required = Boolean(r.required);
   if (!content) throw new Error('Request body must have content defined');
@@ -71,7 +70,7 @@ function toCamel(s: string): string {
   return s.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
 }
 
-function buildParamDef(param: OpenAPIV3_1.ParameterObject, defs: SchemaMap): ParamDefinition {
+function buildQueryOrPathParamDef(param: OpenAPIV3_1.ParameterObject, defs: SchemaMap): ParamDefinition {
   const schema = inlineSchemaWithExample(param.schema!, defs, param.example) as InlinedSchema;
   return {
     name: param.name,
@@ -85,12 +84,12 @@ function buildResponses(responses: OpenAPIV3_1.ResponsesObject | undefined, defs
   const responseBodies: Record<string, ResponseBody | undefined> = {};
   for (const [code, resp] of Object.entries(responses || {})) {
     const r = resp as OpenAPIV3_1.ResponseObject;
-    responseBodies[code] = r.content ? getResponseBody(r, defs) : undefined;
+    responseBodies[code] = r.content ? buildResponseBody(r, defs) : undefined;
   }
   return responseBodies;
 }
 
-function buildExampleEndpointParams(
+export function buildExampleEndpointParams(
   paramDefs: ParamDefinition[],
   responseStreaming: boolean
 ): Record<string, Record<string, any>> {
@@ -142,13 +141,12 @@ function buildEndpoint(path: string, method: HttpMethod, op: OpenAPIV3_1.Operati
   const title = op.summary || op.description || operationId;
   const tags = op.tags || [];
   const queryOrPathParams = (op.parameters as OpenAPIV3_1.ParameterObject[]) || [];
-  const queryOrPathParamDefs = queryOrPathParams.map(p => buildParamDef(p, defs));
-  const requestBodyParam = op.requestBody ? getRequestBodyParam(op.requestBody as OpenAPIV3_1.RequestBodyObject, defs) : undefined;
+  const queryOrPathParamDefs = queryOrPathParams.map(p => buildQueryOrPathParamDef(p, defs));
+  const requestBodyParam = op.requestBody ? buildRequestBodyParamDef(op.requestBody as OpenAPIV3_1.RequestBodyObject, defs) : undefined;
   const paramDefs = requestBodyParam ? [...queryOrPathParamDefs, requestBodyParam] : queryOrPathParamDefs;
 
   const responseBodies = buildResponses(op.responses, defs);
   const streaming = responseBodies['200']?.streaming || false;
-  const exampleParams = buildExampleEndpointParams(paramDefs, streaming);
 
   return {
     operationId,
@@ -157,7 +155,6 @@ function buildEndpoint(path: string, method: HttpMethod, op: OpenAPIV3_1.Operati
     method,
     path,
     paramDefs,
-    exampleParams,
     responseBodies,
     streaming,
     tags,
