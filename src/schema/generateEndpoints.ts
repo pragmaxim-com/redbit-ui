@@ -1,5 +1,6 @@
 import type { OpenAPIV3_1 } from 'openapi-types';
 import { inlineSchemaWithExample, SchemaMap } from './schema';
+import { extractFilterFields } from './streamQuery';
 
 export type InlinedSchema = OpenAPIV3_1.SchemaObject;
 
@@ -13,10 +14,17 @@ interface ResponseBody {
   streaming: boolean;
 }
 
+export interface FilterField {
+  path: string;
+  type: string;
+  examples?: any[];
+}
+
 export interface ParamDefinition {
   name: string;
   in: 'path' | 'query' | 'body';
   required: boolean;
+  filterFields?: FilterField[];
   schema: InlinedSchema;
 }
 
@@ -28,6 +36,7 @@ export interface Endpoint {
   path: string;
   paramDefs: ParamDefinition[];
   responseBodies: Record<string, ResponseBody | undefined>;
+  querying: boolean;
   streaming: boolean;
   tags: string[];
 }
@@ -54,7 +63,7 @@ function buildResponseBody(r: OpenAPIV3_1.ResponseObject, defs: SchemaMap): Resp
   return { mediaType, schema, streaming };
 }
 
-function buildRequestBodyParamDef(r: OpenAPIV3_1.RequestBodyObject, defs: SchemaMap): ParamDefinition {
+function buildRequestBodyParamDef(r: OpenAPIV3_1.RequestBodyObject, querying: boolean, defs: SchemaMap): ParamDefinition {
   const content = r.content as Record<string, any>;
   const required = Boolean(r.required);
   if (!content) throw new Error('Request body must have content defined');
@@ -63,7 +72,8 @@ function buildRequestBodyParamDef(r: OpenAPIV3_1.RequestBodyObject, defs: Schema
   const mediaType = jsonKey || keys[0];
   const entry = content[mediaType];
   const schema = inlineSchemaWithExample(entry.schema, defs, entry.example) as InlinedSchema;
-  return { name: mediaType, in: 'body', required, schema };
+  const filterFields: FilterField[] | undefined = querying ? extractFilterFields(schema) : undefined;
+  return { name: mediaType, in: 'body', filterFields, required, schema };
 }
 
 function toCamel(s: string): string {
@@ -72,10 +82,12 @@ function toCamel(s: string): string {
 
 function buildQueryOrPathParamDef(param: OpenAPIV3_1.ParameterObject, defs: SchemaMap): ParamDefinition {
   const schema = inlineSchemaWithExample(param.schema!, defs, param.example) as InlinedSchema;
+  const filterFields = [{path: param.name, type: "string", examples: schema.examples}];
   return {
     name: param.name,
     in: param.in as any,
     required: Boolean(param.required),
+    filterFields,
     schema,
   };
 }
@@ -142,11 +154,12 @@ function buildEndpoint(path: string, method: HttpMethod, op: OpenAPIV3_1.Operati
   const tags = op.tags || [];
   const queryOrPathParams = (op.parameters as OpenAPIV3_1.ParameterObject[]) || [];
   const queryOrPathParamDefs = queryOrPathParams.map(p => buildQueryOrPathParamDef(p, defs));
-  const requestBodyParam = op.requestBody ? buildRequestBodyParamDef(op.requestBody as OpenAPIV3_1.RequestBodyObject, defs) : undefined;
-  const paramDefs = requestBodyParam ? [...queryOrPathParamDefs, requestBodyParam] : queryOrPathParamDefs;
 
   const responseBodies = buildResponses(op.responses, defs);
   const streaming = responseBodies['200']?.streaming || false;
+  const querying = streaming || method === 'GET';
+  const requestBodyParam = op.requestBody ? buildRequestBodyParamDef(op.requestBody as OpenAPIV3_1.RequestBodyObject, querying, defs) : undefined;
+  const paramDefs = requestBodyParam ? [...queryOrPathParamDefs, requestBodyParam] : queryOrPathParamDefs;
 
   return {
     operationId,
@@ -156,6 +169,7 @@ function buildEndpoint(path: string, method: HttpMethod, op: OpenAPIV3_1.Operati
     path,
     paramDefs,
     responseBodies,
+    querying,
     streaming,
     tags,
   };

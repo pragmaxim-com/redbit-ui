@@ -1,8 +1,4 @@
-export interface FilterField {
-  path: string;
-  type: string;
-  examples?: any[];
-}
+import { FilterField } from './generateEndpoints';
 
 /**
  * Check if a node represents a FilterOp<T> wrapper (single-key object: Eq, Ne, Lt, Le, Gt, Ge, In)
@@ -55,10 +51,7 @@ function appendArraySuffix(pathParts: string[]): string[] {
   return newParts;
 }
 
-/**
- * Main extraction function: walks the schema and collects filterable fields
- */
-export function extractBodyFilterFields(schema: any): FilterField[] {
+export function extractFilterFields(schema: any): FilterField[] {
   const fields: FilterField[] = [];
 
   function defaultExamples(type: string): any[] {
