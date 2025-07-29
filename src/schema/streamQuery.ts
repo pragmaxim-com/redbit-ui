@@ -59,7 +59,7 @@ function appendArraySuffix(pathParts: string[]): string[] {
   return newParts;
 }
 
-export function extractFilterFields(schema: any): FilterField[] {
+export function extractBodyFilterFields(schema: any): FilterField[] {
   const fields: FilterField[] = [];
 
   function defaultExamples(type: string): any[] {
@@ -115,8 +115,11 @@ export function extractFilterFields(schema: any): FilterField[] {
     // Leaf scalar fallback: include examples if present
     if (typeof node.type === 'string' && ['string', 'number', 'integer', 'boolean'].includes(node.type)) {
       const fullPath = pathParts.join('.');
-      const field: FilterField = { path: fullPath, type: node.type };
-      field.examples = Array.isArray(node.examples) ? node.examples : defaultExamples(node.type);
+      const field: FilterField =
+        { path: fullPath,
+          examples: Array.isArray(node.examples) ? node.examples : defaultExamples(node.type),
+          type: node.type
+        };
       fields.push(field);
     }
   }

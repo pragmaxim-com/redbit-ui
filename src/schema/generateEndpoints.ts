@@ -1,6 +1,6 @@
 import type { OpenAPIV3_1 } from 'openapi-types';
 import { HttpMethod, inlineSchemaWithExample, METHODS, SchemaMap } from './schema';
-import { extractFilterFields } from './streamQuery';
+import { extractBodyFilterFields, FilterExpr, FilterOperator } from './streamQuery';
 
 interface ResponseBody {
   schema: OpenAPIV3_1.SchemaObject;
@@ -9,19 +9,56 @@ interface ResponseBody {
 }
 
 export interface FilterField {
-  path: string;
-  type: string;
+  path: string;         // e.g. "utxos[].amount"
+  type: string;         // JSON type: 'string' | 'integer' | …
   examples?: any[];
 }
 
-export interface ParamDefinition {
-  name: string;
-  in: 'path' | 'query' | 'body';
-  required: boolean;
-  filterFields?: FilterField[];
-  schema: OpenAPIV3_1.SchemaObject;
+// discriminate on ParamType
+export enum ParamType {
+  Path    = 'path',
+  Query   = 'query',
+  Entity  = 'entity',  // POST/PUT body as a whole
+  Filter  = 'filter',  // our special filtering body
 }
 
+export type PathParam = {
+  in: ParamType.Path;
+  name: string;
+  required: true;                   // path params are always required
+  schema: OpenAPIV3_1.SchemaObject; // scalar type
+};
+
+export type QueryParam = {
+  in: ParamType.Query;
+  name: string;
+  required: boolean;
+  schema: OpenAPIV3_1.SchemaObject; // scalar type
+};
+
+export type EntityParam = {
+  in: ParamType.Entity;
+  name: string;
+  required: boolean;
+  schema: OpenAPIV3_1.SchemaObject; // arbitrary JSON object
+};
+
+export type FilterParam = {
+  in: ParamType.Filter;
+  name: string;
+  required: boolean;        // if false, this entire filter body is optional
+  fields: FilterField[];    // all of these are either required or optional together
+  schema: OpenAPIV3_1.SchemaObject;
+};
+
+// the full ParamDefinition is now a discriminated union:
+export type ParamDefinition =
+  | PathParam
+  | QueryParam
+  | EntityParam
+  | FilterParam;
+
+// Endpoint just holds those:
 export interface Endpoint {
   operationId: string;
   heyClientMethodName: string;
@@ -30,7 +67,6 @@ export interface Endpoint {
   path: string;
   paramDefs: ParamDefinition[];
   responseBodies: Record<string, ResponseBody | undefined>;
-  querying: boolean;
   streaming: boolean;
   tags: string[];
 }
@@ -66,8 +102,12 @@ function buildRequestBodyParamDef(r: OpenAPIV3_1.RequestBodyObject, querying: bo
   const mediaType = jsonKey || keys[0];
   const entry = content[mediaType];
   const schema = inlineSchemaWithExample(entry.schema, defs, entry.example);
-  const filterFields: FilterField[] | undefined = querying ? extractFilterFields(schema) : undefined;
-  return { name: mediaType, in: 'body', filterFields, required, schema };
+  if (querying) {
+    const fields: FilterField[] = extractBodyFilterFields(schema);
+    return { name: mediaType, in: ParamType.Filter, fields, required, schema } as FilterParam;
+  } else {
+    return { name: mediaType, in: ParamType.Entity, required, schema } as EntityParam;
+  }
 }
 
 function toCamel(s: string): string {
@@ -76,14 +116,14 @@ function toCamel(s: string): string {
 
 function buildQueryOrPathParamDef(param: OpenAPIV3_1.ParameterObject, defs: SchemaMap): ParamDefinition {
   const schema = inlineSchemaWithExample(param.schema!, defs, param.example);
-  const filterFields = [{path: param.name, type: "string", examples: schema.examples}];
-  return {
-    name: param.name,
-    in: param.in as any,
-    required: Boolean(param.required),
-    filterFields,
-    schema,
-  };
+  const required = Boolean(param.required);
+  if (param.in === 'path') {
+    return { name: param.name, in: ParamType.Path, required, schema} as PathParam;
+  } else if (param.in === 'query') {
+    return { name: param.name, in: ParamType.Query, required, schema} as QueryParam;
+  } else {
+    throw new Error(`Unsupported parameter location: ${param.in}`);
+  }
 }
 
 function buildResponses(responses: OpenAPIV3_1.ResponsesObject | undefined, defs: SchemaMap) {
@@ -126,8 +166,8 @@ export function buildExampleEndpointParams(
       if (responseStreaming) args.parseAs = 'stream';
       combo.forEach((ex: any, idx: number) => {
         const p = params[idx];
-        if (p.in === 'body') {
-          args.body = ex;
+        if (p.in === ParamType.Filter || p.in === ParamType.Entity) {
+          args['body'] = ex;
         } else {
           args[p.in] = args[p.in] || {};
           args[p.in][p.name] = ex;
@@ -166,7 +206,6 @@ function buildEndpoint(path: string, method: HttpMethod, op: OpenAPIV3_1.Operati
     path,
     paramDefs,
     responseBodies,
-    querying,
     streaming,
     tags,
   };

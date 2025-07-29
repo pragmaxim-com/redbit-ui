@@ -1,6 +1,13 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import type { OpenAPIV3_1 } from 'openapi-types';
-import { generateEndpoints, Endpoint, ParamDefinition, buildExampleEndpointParams } from './generateEndpoints';
+import {
+  buildExampleEndpointParams,
+  Endpoint,
+  FilterParam,
+  generateEndpoints,
+  ParamDefinition,
+  ParamType,
+} from './generateEndpoints';
 import { fetchSchema, SchemaMap } from './schema';
 import * as client from '../hey';
 import { buildFilterBody, FilterExpr } from './streamQuery';
@@ -21,20 +28,18 @@ function buildExampleArgsWithBodyExpressions(params: ParamDefinition[], response
   if (responseStreaming) args.parseAs = 'stream';
 
   for (const param of params) {
-    if (param.in === 'body') {
-      for (const field of param.filterFields!) {
+    if (param.in === ParamType.Filter) {
+      for (const field of (param as FilterParam).fields) {
         bodyExprs.push({
           fieldPath: field.path,
           op: 'Eq',
           value: field.examples?.[0],
         });
       }
-    } else {
-      if (param.filterFields && param.filterFields.length === 1) {
-        let filterField = param.filterFields[0];
-        args[param.in] = args[param.in] || {};
-        args[param.in][filterField.path] = filterField.examples?.[0];
-      }
+    } else if (param.in === ParamType.Query || param.in === ParamType.Path) {
+      const filterField = {path: param.name, type: "string", examples: param.schema.examples};
+      args[param.in] = args[param.in] || {};
+      args[param.in][filterField.path] = filterField.examples?.[0];
     }
   }
 
@@ -110,7 +115,8 @@ describe('inlinePaths unit tests', () => {
     expect(p.required).toBe(true);
     expect(p.schema.examples![0]).toBe('xyz');
     // requestBody undefined
-    expect(ep.paramDefs.filter(p => p.in === 'body').length).toBe(0);
+    expect(ep.paramDefs.filter(p => p.in === ParamType.Filter).length).toBe(0);
+    expect(ep.paramDefs.filter(p => p.in === ParamType.Entity).length).toBe(0);
     // response schema inlined
     expect(ep.responseBodies['200']).toBeDefined();
   });
@@ -138,8 +144,8 @@ describe('inlinePaths unit tests', () => {
     const ep = result.nums_post;
     expect(ep.heyClientMethodName).toBe('numsPost');
     // requestBody inlined
-    expect(ep.paramDefs.filter(p => p.in === 'body')[0].schema).toEqual(mockDefs.NumArr);
-    expect(ep.paramDefs.filter(p => p.in === 'body')[0].schema.examples![0]).toEqual([7, 8, 9]);
+    expect(ep.paramDefs.filter(p => p.in === ParamType.Entity)[0].schema).toEqual(mockDefs.NumArr);
+    expect(ep.paramDefs.filter(p => p.in === ParamType.Entity)[0].schema.examples![0]).toEqual([7, 8, 9]);
     // responses
     expect(ep.responseBodies['201']?.mediaType).toBe('application/json');
     expect(ep.responseBodies['400']?.mediaType).toBe('application/json');
@@ -158,7 +164,8 @@ describe('inlinePaths unit tests', () => {
     const result = generateEndpoints(raw, mockDefs);
     const ep = result.simple_delete;
     expect(ep.paramDefs).toHaveLength(0);
-    expect(ep.paramDefs.filter(p => p.in === 'body').length).toBe(0);
+    expect(ep.paramDefs.filter(p => p.in === ParamType.Entity).length).toBe(0);
+    expect(ep.paramDefs.filter(p => p.in === ParamType.Filter).length).toBe(0);
     // 204 with no content => no responseSchemas entry
     expect(ep.responseBodies['204']).toBeUndefined();
   });

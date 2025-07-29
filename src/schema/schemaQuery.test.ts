@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { extractFilterFields } from './streamQuery';
+import { extractBodyFilterFields } from './streamQuery';
 import type { OpenAPIV3_1 } from 'openapi-types';
 import { fetchSchema, SchemaMap } from './schema';
-import { generateEndpoints } from './generateEndpoints';
+import { FilterParam, generateEndpoints, ParamType } from './generateEndpoints';
 
 const openapi: OpenAPIV3_1.Document = await fetchSchema('http://127.0.0.1:8000/apidoc/openapi.json');
 const realDefs: SchemaMap = openapi.components?.schemas as any;
@@ -10,15 +10,15 @@ const endpoints = generateEndpoints(openapi.paths!, realDefs);
 
 describe('extractFilterFields', () => {
   it(`extract body fields from real schema`, async () => {
-    Object.values(endpoints).filter(ep => ep.querying).forEach(ep => {
-      for (const param of ep.paramDefs) {
-        param.filterFields!.forEach(f => {
+    Object.values(endpoints).filter(ep => ep.streaming || ep.method === 'GET' ).forEach(ep => {
+      for (const param of ep.paramDefs) if (param.in === ParamType.Filter) {
+        const fields = (param as FilterParam).fields;
+        fields.forEach(f => {
           if (f.path === '') {
             throw new Error(`Empty param:\n ${JSON.stringify(param.schema, null, 2)}`);
           }
         });
-        expect(param.filterFields!).toBeDefined();
-        expect(param.filterFields!.length).toBeGreaterThan(0);
+        expect(fields.length).toBeGreaterThan(0);
       }
     });
   });
@@ -41,7 +41,7 @@ describe('extractFilterFields', () => {
       },
     };
 
-    const fields = extractFilterFields(schema);
+    const fields = extractBodyFilterFields(schema);
     expect(fields).toEqual([
       { path: 'hash', type: 'string', examples: ['a'] },
     ]);
@@ -65,7 +65,7 @@ describe('extractFilterFields', () => {
       },
     };
 
-    const fields = extractFilterFields(schema);
+    const fields = extractBodyFilterFields(schema);
     expect(fields).toEqual([
       { path: 'amount', type: 'integer', examples: [0] },
     ]);
@@ -108,7 +108,7 @@ describe('extractFilterFields', () => {
       },
     };
 
-    const fields = extractFilterFields(schema);
+    const fields = extractBodyFilterFields(schema);
     expect(fields).toEqual([
       { path: 'input.id', type: 'string', examples: ['example'] },
       { path: 'input.hash', type: 'string', examples: ['example'] },
@@ -168,7 +168,7 @@ describe('extractFilterFields', () => {
       },
     };
 
-    const fields = extractFilterFields(schema);
+    const fields = extractBodyFilterFields(schema);
     expect(fields).toEqual([
       { path: 'utxos[].address', type: 'string', examples: ['example'] },
       { path: 'utxos[].assets[].name', type: 'string', examples: ['example'] },
@@ -191,7 +191,7 @@ describe('extractFilterFields', () => {
       },
     };
 
-    const fields = extractFilterFields(schema);
+    const fields = extractBodyFilterFields(schema);
     expect(fields).toEqual([
       { path: 'status', type: 'string', examples: ['example'] },
       { path: 'count', type: 'integer', examples: [0] },
@@ -208,7 +208,7 @@ describe('extractFilterFields', () => {
       },
     };
 
-    const fields = extractFilterFields(schema);
+    const fields = extractBodyFilterFields(schema);
     expect(fields).toEqual([]);
   });
 });
