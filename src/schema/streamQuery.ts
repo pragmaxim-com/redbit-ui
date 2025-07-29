@@ -25,11 +25,7 @@ function unwrapFilterOp(schema: any): { type: string; examples?: any[] } | null 
   if (!schema || typeof schema !== 'object') return null;
 
   // Unwrap oneOf and anyOf variants
-  const variants: any[] = Array.isArray(schema.oneOf)
-    ? schema.oneOf
-    : Array.isArray(schema.anyOf)
-      ? schema.anyOf
-      : [];
+  const variants: any[] = Array.isArray(schema.oneOf) ? schema.oneOf : Array.isArray(schema.anyOf) ? schema.anyOf : [];
 
   for (const variant of variants) {
     const unwrapped = unwrapFilterOp(variant);
@@ -64,11 +60,15 @@ export function extractBodyFilterFields(schema: any): FilterField[] {
 
   function defaultExamples(type: string): any[] {
     switch (type) {
-      case 'string': return ['example'];
+      case 'string':
+        return ['example'];
       case 'integer':
-      case 'number': return [0];
-      case 'boolean': return [true];
-      default: return [];
+      case 'number':
+        return [0];
+      case 'boolean':
+        return [true];
+      default:
+        return [];
     }
   }
 
@@ -115,11 +115,7 @@ export function extractBodyFilterFields(schema: any): FilterField[] {
     // Leaf scalar fallback: include examples if present
     if (typeof node.type === 'string' && ['string', 'number', 'integer', 'boolean'].includes(node.type)) {
       const fullPath = pathParts.join('.');
-      const field: FilterField =
-        { path: fullPath,
-          examples: Array.isArray(node.examples) ? node.examples : defaultExamples(node.type),
-          type: node.type
-        };
+      const field: FilterField = { path: fullPath, examples: Array.isArray(node.examples) ? node.examples : defaultExamples(node.type), type: node.type };
       fields.push(field);
     }
   }

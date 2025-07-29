@@ -7,8 +7,8 @@ export type SchemaMap = Record<string, SchemaOrRef>;
 export type HttpMethod = 'GET' | 'POST' | 'HEAD' | 'DELETE';
 export type Composite = 'oneOf' | 'anyOf' | 'allOf';
 
-export const METHODS: readonly HttpMethod[] = ['GET','POST','HEAD','DELETE'];
-export const COMPOSITES: readonly Composite[]= ['oneOf', 'anyOf', 'allOf'];
+export const METHODS: readonly HttpMethod[] = ['GET', 'POST', 'HEAD', 'DELETE'];
+export const COMPOSITES: readonly Composite[] = ['oneOf', 'anyOf', 'allOf'];
 /**
  * Fetches and inlines a schema from an OpenAPI URL
  */

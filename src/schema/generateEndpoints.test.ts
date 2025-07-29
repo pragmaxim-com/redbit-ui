@@ -1,13 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { OpenAPIV3_1 } from 'openapi-types';
-import {
-  buildExampleEndpointParams,
-  Endpoint,
-  FilterParam,
-  generateEndpoints,
-  ParamDefinition,
-  ParamType,
-} from './generateEndpoints';
+import { buildExampleEndpointParams, Endpoint, FilterParam, generateEndpoints, ParamDefinition, ParamType } from './generateEndpoints';
 import { fetchSchema, SchemaMap } from './schema';
 import * as client from '../hey';
 import { buildFilterBody, FilterExpr } from './streamQuery';
@@ -37,7 +30,7 @@ function buildExampleArgsWithBodyExpressions(params: ParamDefinition[], response
         });
       }
     } else if (param.in === ParamType.Query || param.in === ParamType.Path) {
-      const filterField = {path: param.name, type: "string", examples: param.schema.examples};
+      const filterField = { path: param.name, type: 'string', examples: param.schema.examples };
       args[param.in] = args[param.in] || {};
       args[param.in][filterField.path] = filterField.examples?.[0];
     }

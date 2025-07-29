@@ -10,17 +10,20 @@ const endpoints = generateEndpoints(openapi.paths!, realDefs);
 
 describe('extractFilterFields', () => {
   it(`extract body fields from real schema`, async () => {
-    Object.values(endpoints).filter(ep => ep.streaming || ep.method === 'GET' ).forEach(ep => {
-      for (const param of ep.paramDefs) if (param.in === ParamType.Filter) {
-        const fields = (param as FilterParam).fields;
-        fields.forEach(f => {
-          if (f.path === '') {
-            throw new Error(`Empty param:\n ${JSON.stringify(param.schema, null, 2)}`);
+    Object.values(endpoints)
+      .filter(ep => ep.streaming || ep.method === 'GET')
+      .forEach(ep => {
+        for (const param of ep.paramDefs)
+          if (param.in === ParamType.Filter) {
+            const fields = (param as FilterParam).fields;
+            fields.forEach(f => {
+              if (f.path === '') {
+                throw new Error(`Empty param:\n ${JSON.stringify(param.schema, null, 2)}`);
+              }
+            });
+            expect(fields.length).toBeGreaterThan(0);
           }
-        });
-        expect(fields.length).toBeGreaterThan(0);
-      }
-    });
+      });
   });
 
   it('extracts string fields with FilterOp', () => {
@@ -42,9 +45,7 @@ describe('extractFilterFields', () => {
     };
 
     const fields = extractBodyFilterFields(schema);
-    expect(fields).toEqual([
-      { path: 'hash', type: 'string', examples: ['a'] },
-    ]);
+    expect(fields).toEqual([{ path: 'hash', type: 'string', examples: ['a'] }]);
   });
 
   it('extracts integer fields with FilterOp', () => {
@@ -66,9 +67,7 @@ describe('extractFilterFields', () => {
     };
 
     const fields = extractBodyFilterFields(schema);
-    expect(fields).toEqual([
-      { path: 'amount', type: 'integer', examples: [0] },
-    ]);
+    expect(fields).toEqual([{ path: 'amount', type: 'integer', examples: [0] }]);
   });
 
   it('handles nested object fields', () => {

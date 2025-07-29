@@ -9,23 +9,23 @@ interface ResponseBody {
 }
 
 export interface FilterField {
-  path: string;         // e.g. "utxos[].amount"
-  type: string;         // JSON type: 'string' | 'integer' | …
+  path: string; // e.g. "utxos[].amount"
+  type: string; // JSON type: 'string' | 'integer' | …
   examples?: any[];
 }
 
 // discriminate on ParamType
 export enum ParamType {
-  Path    = 'path',
-  Query   = 'query',
-  Entity  = 'entity',  // POST/PUT body as a whole
-  Filter  = 'filter',  // our special filtering body
+  Path = 'path',
+  Query = 'query',
+  Entity = 'entity', // POST/PUT body as a whole
+  Filter = 'filter', // our special filtering body
 }
 
 export type PathParam = {
   in: ParamType.Path;
   name: string;
-  required: true;                   // path params are always required
+  required: true; // path params are always required
   schema: OpenAPIV3_1.SchemaObject; // scalar type
 };
 
@@ -46,17 +46,13 @@ export type EntityParam = {
 export type FilterParam = {
   in: ParamType.Filter;
   name: string;
-  required: boolean;        // if false, this entire filter body is optional
-  fields: FilterField[];    // all of these are either required or optional together
+  required: boolean; // if false, this entire filter body is optional
+  fields: FilterField[]; // all of these are either required or optional together
   schema: OpenAPIV3_1.SchemaObject;
 };
 
 // the full ParamDefinition is now a discriminated union:
-export type ParamDefinition =
-  | PathParam
-  | QueryParam
-  | EntityParam
-  | FilterParam;
+export type ParamDefinition = PathParam | QueryParam | EntityParam | FilterParam;
 
 // Endpoint just holds those:
 export interface Endpoint {
@@ -118,9 +114,9 @@ function buildQueryOrPathParamDef(param: OpenAPIV3_1.ParameterObject, defs: Sche
   const schema = inlineSchemaWithExample(param.schema!, defs, param.example);
   const required = Boolean(param.required);
   if (param.in === 'path') {
-    return { name: param.name, in: ParamType.Path, required, schema} as PathParam;
+    return { name: param.name, in: ParamType.Path, required, schema } as PathParam;
   } else if (param.in === 'query') {
-    return { name: param.name, in: ParamType.Query, required, schema} as QueryParam;
+    return { name: param.name, in: ParamType.Query, required, schema } as QueryParam;
   } else {
     throw new Error(`Unsupported parameter location: ${param.in}`);
   }
@@ -135,17 +131,11 @@ function buildResponses(responses: OpenAPIV3_1.ResponsesObject | undefined, defs
   return responseBodies;
 }
 
-export function buildExampleEndpointParams(
-  paramDefs: ParamDefinition[],
-  responseStreaming: boolean
-): Record<string, Record<string, any>> {
+export function buildExampleEndpointParams(paramDefs: ParamDefinition[], responseStreaming: boolean): Record<string, Record<string, any>> {
   const required = paramDefs.filter(p => p.required);
   const optional = paramDefs.filter(p => !p.required);
   type Variant = { title: string; params: ParamDefinition[] };
-  const variants: Variant[] = [
-    { title: 'all', params: [...required, ...optional] },
-    ...optional.map(p => ({ title: p.name, params: [...required, p] })),
-  ];
+  const variants: Variant[] = [{ title: 'all', params: [...required, ...optional] }, ...optional.map(p => ({ title: p.name, params: [...required, p] }))];
 
   const argsMap: Record<string, Record<string, any>> = {};
 
@@ -156,9 +146,7 @@ export function buildExampleEndpointParams(
     // Compute Cartesian product of these example sets
     let combos: any[][] = [[]];
     for (const examples of exampleSets) {
-      combos = combos.flatMap(prev =>
-        examples.map((ex: any) => [...prev, ex])
-      );
+      combos = combos.flatMap(prev => examples.map((ex: any) => [...prev, ex]));
     }
 
     combos.forEach((combo: any[], comboIdx: number) => {
