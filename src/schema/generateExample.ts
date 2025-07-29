@@ -15,14 +15,14 @@ export function generateExamplesRec(val: SchemaOrRef, defs: SchemaMap): any[] {
 
   const schema = val as OpenAPIV3_1.SchemaObject;
 
+  // multiple named examples
+  if (Array.isArray((schema as any).examples) && (schema as any).examples.length > 0) {
+    return (schema as any).examples;
+  }
+
   // single example field
   if (schema.example !== undefined) {
     return [schema.example];
-  }
-
-  // multiple named examples
-  if (Array.isArray((schema as any).examples) && (schema as any).examples.length) {
-    return (schema as any).examples;
   }
 
   let results: any[] = [];

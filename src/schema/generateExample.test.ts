@@ -30,6 +30,9 @@ describe('generateExample', () => {
     expect(example.transactions.length).toBeGreaterThan(0);
     expect(example.transactions[0]).toHaveProperty('hash');
 
-    // console.log(JSON.stringify(example, null, 2));
+    // deeply nested array field
+    expect(example.transactions[0]).toHaveProperty('utxos');
+    expect(Array.isArray(example.transactions[0].utxos)).toBe(true);
+    expect(example.transactions[0].utxos[0]).toHaveProperty('amount');
   });
 });

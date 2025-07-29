@@ -3,6 +3,7 @@ import type { OpenAPIV3_1 } from 'openapi-types';
 import { generateEndpoints, Endpoint, ParamDefinition, buildExampleEndpointParams } from './generateEndpoints';
 import { fetchSchema, SchemaMap } from './schema';
 import * as client from '../hey';
+import { buildFilterBody, FilterExpr } from './streamQuery';
 
 const mockDefs: SchemaMap = {
   StringObj: { type: 'object', properties: { foo: { type: 'string' } }, examples: [{ foo: 'bar' }] },
@@ -14,9 +15,51 @@ const realDefs: SchemaMap = openapi.components?.schemas as any;
 const endpoints = generateEndpoints(openapi.paths!, realDefs);
 const realEndpoints: Endpoint[] = Object.values(endpoints).filter(ep => ep.method !== 'DELETE');
 
+function buildExampleArgsWithBodyExpressions(params: ParamDefinition[], responseStreaming: boolean): Record<string, any> {
+  const bodyExprs: FilterExpr[] = [];
+  const args: Record<string, any> = { throwOnError: false };
+  if (responseStreaming) args.parseAs = 'stream';
+
+  for (const param of params) {
+    if (param.in === 'body') {
+      for (const field of param.filterFields!) {
+        bodyExprs.push({
+          fieldPath: field.path,
+          op: 'Eq',
+          value: field.examples?.[0],
+        });
+      }
+    } else {
+      if (param.filterFields && param.filterFields.length === 1) {
+        let filterField = param.filterFields[0];
+        args[param.in] = args[param.in] || {};
+        args[param.in][filterField.path] = filterField.examples?.[0];
+      }
+    }
+  }
+
+  args.body = bodyExprs.length > 0 ? buildFilterBody(bodyExprs) : undefined;
+  return args;
+}
+
 describe('Hey-API JSON client calls', () => {
   it('has endpoints to test', () => {
     expect(realEndpoints.length).toBeGreaterThan(0);
+  });
+
+  it(`execute streaming request`, async () => {
+    for (const ep of Object.values(endpoints).filter(ep => ep.streaming)) {
+      let args = buildExampleArgsWithBodyExpressions(ep.paramDefs!, ep.streaming);
+      const { data, response, error } = await (client as any)[ep.heyClientMethodName](args);
+      if (response.status !== 200) {
+        console.error(`Error calling ${ep.streaming} ${ep.heyClientMethodName}(${JSON.stringify(args)})`);
+        console.error('Response:', response);
+        console.error('Error:', error);
+      }
+      expect(response.status).toBe(200);
+      expect(error).toBeUndefined();
+      expect(data).toBeDefined();
+    }
   });
 
   realEndpoints.forEach(ep => {

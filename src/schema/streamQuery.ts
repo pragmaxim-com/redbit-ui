@@ -1,12 +1,20 @@
 import { FilterField } from './generateEndpoints';
 
+export type FilterOperator = 'Eq' | 'Ne' | 'Lt' | 'Le' | 'Gt' | 'Ge' | 'In';
+export const FilterOperators = ['Eq', 'Ne', 'Lt', 'Le', 'Gt', 'Ge', 'In'];
+export type FilterExpr = {
+  fieldPath: string; // "utxos[].assets[].amount"
+  op: FilterOperator;
+  value: string | number | string[] | number[];
+};
+
 /**
  * Check if a node represents a FilterOp<T> wrapper (single-key object: Eq, Ne, Lt, Le, Gt, Ge, In)
  */
 function isFilterOpWrapper(node: any): boolean {
   if (!node || node.type !== 'object' || typeof node.properties !== 'object') return false;
   const keys = Object.keys(node.properties);
-  return keys.length === 1 && ['Eq', 'Ne', 'Lt', 'Le', 'Gt', 'Ge', 'In'].includes(keys[0]);
+  return keys.length === 1 && FilterOperators.includes(keys[0]);
 }
 
 /**
@@ -115,4 +123,29 @@ export function extractFilterFields(schema: any): FilterField[] {
 
   walk(schema, []);
   return fields;
+}
+
+export function buildFilterBody(exprs: FilterExpr[]): any {
+  const body: any = {};
+
+  exprs.forEach(({ fieldPath, op, value }) => {
+    const parts = fieldPath.split('.').map(p => p.replace(/\[]$/, ''));
+    let cursor = body;
+    parts.forEach((key, idx) => {
+      const isLast = idx === parts.length - 1;
+      if (isLast) {
+        if (!cursor[key] || typeof cursor[key] !== 'object') {
+          cursor[key] = {};
+        }
+        cursor[key][op] = value;
+      } else {
+        if (!(key in cursor) || typeof cursor[key] !== 'object') {
+          cursor[key] = {};
+        }
+        cursor = cursor[key];
+      }
+    });
+  });
+
+  return body;
 }
