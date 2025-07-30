@@ -185,7 +185,7 @@ export function buildExampleEndpointParams(paramDefs: ParamDefinition[], respons
   return argsMap;
 }
 
-export function extractParamsAndFields(endpoint: Endpoint) {
+export function extractParamsAndFilterFields(endpoint: Endpoint) {
   const pathQueryParams: ParamDefinition[] = [];
   const filterFields: FilterField[] = [];
   for (const p of endpoint.paramDefs) {
@@ -197,8 +197,7 @@ export function extractParamsAndFields(endpoint: Endpoint) {
       }
     }
   }
-  const requiredFieldNames: string[] = endpoint.paramDefs.filter(p => p.required).map(p => p.name);
-  return { pathQueryParams, filterFields, requiredFieldNames };
+  return { pathQueryParams, filterFields };
 }
 
 function buildEndpoint(path: string, method: HttpMethod, op: OpenAPIV3_1.OperationObject, defs: SchemaMap): Endpoint {
