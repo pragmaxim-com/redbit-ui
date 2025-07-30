@@ -6,8 +6,15 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Endpoint, FilterField, FilterParam, ParamDefinition, ParamType } from '@/schema/generateEndpoints';
-import { buildFilterBody, FilterExpr, FilterOperator, FilterOperators } from '@/schema/streamQuery';
+import {
+  buildFullRequest,
+  Endpoint,
+  extractParamsAndFields,
+  FilterField,
+  ParamDefinition,
+  PathQueryParamValues,
+} from '@/schema/generateEndpoints';
+import { buildFilterBody, buildFilterExpr, FilterExpr, FilterOperator, FilterOperators } from '@/schema/streamQuery';
 import * as client from '../hey';
 
 interface EndpointAutocompleteProps {
@@ -15,9 +22,11 @@ interface EndpointAutocompleteProps {
 }
 
 export function EndpointAutocomplete({ endpoints }: EndpointAutocompleteProps) {
-  const [open, setOpen] = React.useState(false);
+  const [open, setOpen] = React.useState(true);
   const [selectedEndpoint, setSelectedEndpoint] = React.useState<Endpoint | null>(null);
   const [query, setQuery] = React.useState('');
+
+  // Submission state
   const [submitting, setSubmitting] = React.useState(false);
   const [response, setResponse] = React.useState<any>(null);
   const [error, setError] = React.useState<any>(null);
@@ -30,30 +39,36 @@ export function EndpointAutocomplete({ endpoints }: EndpointAutocompleteProps) {
   const filteredEndpoints = React.useMemo(() => endpoints.filter(e => e.operationId.toLowerCase().includes(query.toLowerCase())), [query, endpoints]);
 
   const { pathQueryParams, filterFields, requiredFieldNames } = React.useMemo(() => {
-    if (!selectedEndpoint) return { pathQueryParams: [] as ParamDefinition[], filterFields: [] as FilterField[], requiredFieldNames: [] as string[] };
-    const pathQueryParams: ParamDefinition[] = [];
-    const filterFields: FilterField[] = [];
-    for (const p of selectedEndpoint.paramDefs) {
-      if (p.in === ParamType.Path || p.in === ParamType.Query) {
-        pathQueryParams.push(p);
-      } else if (p.in === ParamType.Filter) {
-        for (const f of (p as FilterParam).fields) {
-          filterFields.push(f);
-        }
-      }
-    }
-    const requiredFieldNames: string[] = selectedEndpoint.paramDefs.filter(p => p.required).map(p => p.name);
-    return { pathQueryParams, filterFields, requiredFieldNames };
+    if (!selectedEndpoint)
+      return { pathQueryParams: [] as ParamDefinition[], filterFields: [] as FilterField[], requiredFieldNames: [] as string[] };
+    else
+      return extractParamsAndFields(selectedEndpoint!);
   }, [selectedEndpoint]);
+
+  // Initialize default operator 'Eq' for all filter fields
+  React.useEffect(() => {
+    if (filterFields) {
+      setFieldOps(prev => {
+        const next = { ...prev };
+        filterFields.forEach(f => {
+          if (!next[f.path]) next[f.path] = 'Eq';
+        });
+        return next;
+      });
+    }
+  }, [filterFields]);
 
   const allReqFilled = requiredFieldNames.every(f => !!fieldValues[f]?.trim());
 
   const selectEndpoint = (ep: Endpoint) => {
+    setOpen(false);
     setSelectedEndpoint(ep);
+    setQuery(ep.operationId);
     setFieldValues({});
     setFieldOps({});
-    setOpen(false);
-    setQuery(ep.operationId);
+    setSubmitting(false);
+    setResponse(null);
+    setError(null);
   };
 
   const handleSubmit = async () => {
@@ -63,18 +78,10 @@ export function EndpointAutocomplete({ endpoints }: EndpointAutocompleteProps) {
     setResponse(null);
     const exprs: FilterExpr[] = filterFields
       .filter(f => fieldValues[f.path]?.trim())
-      .map(f => ({
-        fieldPath: f.path,
-        op: fieldOps[f.path] || 'Eq',
-        value: f.type === 'integer' || f.type === 'number' ? Number(fieldValues[f.path]) : fieldValues[f.path],
-      }));
-    const args: any = { throwOnError: false };
-    if (selectedEndpoint.streaming) args.parseAs = 'stream';
-    pathQueryParams.forEach(pd => {
-      args[pd.in] = args[pd.in] || {};
-      args[pd.in][pd.name] = fieldValues[pd.name];
-    });
-    if (exprs.length) args.body = buildFilterBody(exprs);
+      .map(f => buildFilterExpr(f, fieldOps[f.path], fieldValues[f.path]));
+    const body = exprs.length ? buildFilterBody(exprs) : undefined;
+    const pathQueryParamValues: PathQueryParamValues[] = pathQueryParams.map(pd => [pd.in, pd.name, fieldValues[pd.name]]);
+    const args: Record<string, any> = buildFullRequest(selectedEndpoint.streaming, pathQueryParamValues, body);
     const { data, response, error } = await (client as any)[selectedEndpoint.heyClientMethodName](args);
     setResponse(response);
     setError(error);
@@ -127,7 +134,7 @@ export function EndpointAutocomplete({ endpoints }: EndpointAutocompleteProps) {
                 <div key={f.path} className="flex flex-col">
                   <Label>{f.path}</Label>
                   <div className="flex gap-2">
-                    <Select value={fieldOps[f.path] || 'Eq'} onValueChange={o => setFieldOps({ ...fieldOps, [f.path]: o as FilterOperator })}>
+                    <Select value={fieldOps[f.path]} onValueChange={o => setFieldOps({ ...fieldOps, [f.path]: o as FilterOperator })}>
                       <SelectTrigger className="w-24">
                         <SelectValue placeholder="Op" />
                       </SelectTrigger>

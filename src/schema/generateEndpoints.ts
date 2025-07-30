@@ -1,6 +1,6 @@
 import type { OpenAPIV3_1 } from 'openapi-types';
 import { HttpMethod, inlineSchemaWithExample, METHODS, SchemaMap } from './schema';
-import { extractBodyFilterFields, FilterExpr, FilterOperator } from './streamQuery';
+import { extractBodyFilterFields } from './streamQuery';
 
 interface ResponseBody {
   schema: OpenAPIV3_1.SchemaObject;
@@ -22,30 +22,31 @@ export enum ParamType {
   Filter = 'filter', // our special filtering body
 }
 
+export type ParamName = string; // for convenience, just a string
 export type PathParam = {
   in: ParamType.Path;
-  name: string;
+  name: ParamName;
   required: true; // path params are always required
   schema: OpenAPIV3_1.SchemaObject; // scalar type
 };
 
 export type QueryParam = {
   in: ParamType.Query;
-  name: string;
+  name: ParamName;
   required: boolean;
   schema: OpenAPIV3_1.SchemaObject; // scalar type
 };
 
 export type EntityParam = {
   in: ParamType.Entity;
-  name: string;
+  name: ParamName;
   required: boolean;
   schema: OpenAPIV3_1.SchemaObject; // arbitrary JSON object
 };
 
 export type FilterParam = {
   in: ParamType.Filter;
-  name: string;
+  name: ParamName;
   required: boolean; // if false, this entire filter body is optional
   fields: FilterField[]; // all of these are either required or optional together
   schema: OpenAPIV3_1.SchemaObject;
@@ -75,6 +76,18 @@ function toHttpMethod(raw: string): HttpMethod {
     return upper as HttpMethod;
   }
   throw new Error(`Unsupported HTTP method: ${raw}`);
+}
+
+export type PathQueryParamValues = [ParamType, ParamName, string];
+export function buildFullRequest(streaming: boolean, pathQueryParams: PathQueryParamValues[], body: any | undefined): Record<string, any> {
+  const args: any = { throwOnError: false };
+  if (streaming) args.parseAs = 'stream';
+  pathQueryParams.forEach(([pin, pname, pvalue]) => {
+    args[pin] = args[pin] || {};
+    args[pin][pname] = pvalue;
+  });
+  if (body) args.body = body;
+  return args;
 }
 
 function buildResponseBody(r: OpenAPIV3_1.ResponseObject, defs: SchemaMap): ResponseBody {
@@ -150,23 +163,42 @@ export function buildExampleEndpointParams(paramDefs: ParamDefinition[], respons
     }
 
     combos.forEach((combo: any[], comboIdx: number) => {
-      const args: Record<string, any> = { throwOnError: false };
-      if (responseStreaming) args.parseAs = 'stream';
-      combo.forEach((ex: any, idx: number) => {
+      const body: any | undefined = combo.find((ex: any, idx: number) => {
         const p = params[idx];
-        if (p.in === ParamType.Filter || p.in === ParamType.Entity) {
-          args['body'] = ex;
-        } else {
-          args[p.in] = args[p.in] || {};
-          args[p.in][p.name] = ex;
-        }
+        return p.in === ParamType.Entity || p.in === ParamType.Filter
       });
+      const paramValues: PathQueryParamValues[] =
+        combo.filter((ex: any, idx: number) => {
+          const p = params[idx];
+          return p.in === ParamType.Path || p.in === ParamType.Query;
+        }).map((ex: any, idx: number) => {
+          const p = params[idx];
+          return [p.in, p.name, ex];
+        });
+
+      const args: Record<string, any> = buildFullRequest(responseStreaming, paramValues, body);
       const key = combos.length > 1 ? `${title}-${comboIdx}` : title;
       argsMap[key] = args;
     });
   }
 
   return argsMap;
+}
+
+export function extractParamsAndFields(endpoint: Endpoint) {
+  const pathQueryParams: ParamDefinition[] = [];
+  const filterFields: FilterField[] = [];
+  for (const p of endpoint.paramDefs) {
+    if (p.in === ParamType.Path || p.in === ParamType.Query) {
+      pathQueryParams.push(p);
+    } else if (p.in === ParamType.Filter) {
+      for (const f of (p as FilterParam).fields) {
+        filterFields.push(f);
+      }
+    }
+  }
+  const requiredFieldNames: string[] = endpoint.paramDefs.filter(p => p.required).map(p => p.name);
+  return { pathQueryParams, filterFields, requiredFieldNames };
 }
 
 function buildEndpoint(path: string, method: HttpMethod, op: OpenAPIV3_1.OperationObject, defs: SchemaMap): Endpoint {

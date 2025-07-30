@@ -124,6 +124,28 @@ export function extractBodyFilterFields(schema: any): FilterField[] {
   return fields;
 }
 
+export function buildFilterExpr(f: FilterField, op: FilterOperator, raw: string): FilterExpr {
+  if (!op || !f) {
+    throw new Error(`Filter field and operator is required for field ${f.path}`);
+  }
+  let value: any;
+  if (op === 'In') {
+    // split comma-separated, trim, parse numbers if needed
+    const parts = raw.split(',').map(s => s.trim()).filter(Boolean);
+    if (f.type === 'integer' || f.type === 'number') {
+      value = parts.map(p => Number(p));
+    } else {
+      value = parts;
+    }
+  } else if (f.type === 'integer' || f.type === 'number') {
+    value = Number(raw);
+  } else {
+    value = raw;
+  }
+  return { fieldPath: f.path, op, value };
+}
+
+
 export function buildFilterBody(exprs: FilterExpr[]): any {
   const body: any = {};
 

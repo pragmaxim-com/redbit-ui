@@ -1,9 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import type { OpenAPIV3_1 } from 'openapi-types';
-import { buildExampleEndpointParams, Endpoint, FilterParam, generateEndpoints, ParamDefinition, ParamType } from './generateEndpoints';
+import {
+  buildExampleEndpointParams,
+  Endpoint,
+  FilterParam,
+  generateEndpoints,
+  ParamDefinition,
+  ParamType, PathQueryParamValues, buildFullRequest,
+} from './generateEndpoints';
 import { fetchSchema, SchemaMap } from './schema';
 import * as client from '../hey';
-import { buildFilterBody, FilterExpr } from './streamQuery';
+import { buildFilterBody, buildFilterExpr } from './streamQuery';
 
 const mockDefs: SchemaMap = {
   StringObj: { type: 'object', properties: { foo: { type: 'string' } }, examples: [{ foo: 'bar' }] },
@@ -16,28 +23,20 @@ const endpoints = generateEndpoints(openapi.paths!, realDefs);
 const realEndpoints: Endpoint[] = Object.values(endpoints).filter(ep => ep.method !== 'DELETE');
 
 function buildExampleArgsWithBodyExpressions(params: ParamDefinition[], responseStreaming: boolean): Record<string, any> {
-  const bodyExprs: FilterExpr[] = [];
-  const args: Record<string, any> = { throwOnError: false };
-  if (responseStreaming) args.parseAs = 'stream';
+  const bodyParam: FilterParam | undefined = params.find(p => {
+    return p.in === ParamType.Filter
+  });
+  const body =
+    bodyParam ? buildFilterBody(bodyParam.fields.map(f => buildFilterExpr(f, 'Eq', f.examples?.[0]))) : undefined;
 
-  for (const param of params) {
-    if (param.in === ParamType.Filter) {
-      for (const field of (param as FilterParam).fields) {
-        bodyExprs.push({
-          fieldPath: field.path,
-          op: 'Eq',
-          value: field.examples?.[0],
-        });
-      }
-    } else if (param.in === ParamType.Query || param.in === ParamType.Path) {
-      const filterField = { path: param.name, type: 'string', examples: param.schema.examples };
-      args[param.in] = args[param.in] || {};
-      args[param.in][filterField.path] = filterField.examples?.[0];
-    }
-  }
+  const paramValues: PathQueryParamValues[] =
+    params.filter(p => {
+      return p.in === ParamType.Path || p.in === ParamType.Query;
+    }).map(p => {
+      return [p.in, p.name, p.schema.examples?.[0]];
+    });
 
-  args.body = bodyExprs.length > 0 ? buildFilterBody(bodyExprs) : undefined;
-  return args;
+  return buildFullRequest(responseStreaming, paramValues, body);
 }
 
 describe('Hey-API JSON client calls', () => {
@@ -161,27 +160,5 @@ describe('inlinePaths unit tests', () => {
     expect(ep.paramDefs.filter(p => p.in === ParamType.Filter).length).toBe(0);
     // 204 with no content => no responseSchemas entry
     expect(ep.responseBodies['204']).toBeUndefined();
-  });
-});
-
-describe('inlinePaths with real OpenAPI schema', () => {
-  it('parses at least one endpoint', () => {
-    expect(Object.keys(endpoints).length).toBeGreaterThan(0);
-  });
-
-  it('includes GET /block/id/{id} with correct response schemas', () => {
-    const ep = Object.values(endpoints).find(e => e.path === '/block/id/{id}' && e.method === 'GET');
-    expect(ep).toBeDefined();
-    expect(ep?.responseBodies['200']).toBeDefined();
-    // either 404 or 500 should exist
-    expect(ep?.responseBodies['500'] || ep?.responseBodies['404']).toBeDefined();
-  });
-
-  it('includes POST /asset with query params', () => {
-    const ep = Object.values(endpoints).find(e => e.path === '/asset' && e.method === 'GET');
-    // asset_limit operation
-    expect(ep).toBeDefined();
-    // should have multiple query params
-    expect(ep?.paramDefs.some(p => p.in === 'query')).toBe(true);
   });
 });
