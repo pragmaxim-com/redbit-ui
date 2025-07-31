@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "shadcn:init": "npx shadcn@latest init -y",
-    "shadcn:add-ui": "npx shadcn@latest add input button label select command popover",
+    "shadcn:add-ui": "npx shadcn@latest add input button label select command popover table",
     "shadcn:setup": "npm run shadcn:init && npm run shadcn:add-ui",
     "openapi:generate": "npx @hey-api/openapi-ts -i http://127.0.0.1:8000/apidoc/openapi.json -o src/hey",
     "format": "prettier --write .",

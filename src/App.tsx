@@ -18,8 +18,10 @@ export default function App() {
   const endpoints = generateEndpoints(openapi.paths!, realDefs);
 
   return (
-    <div className="max-w-2xl mx-auto py-10">
-      <EndpointAutocomplete endpoints={Object.values(endpoints)} />
+    <div className="w-full py-10 bg-gray-50">
+      <div className="max-w-7xl mx-auto px-4">
+        <EndpointAutocomplete endpoints={Object.values(endpoints)} />
+      </div>
     </div>
   );
 }

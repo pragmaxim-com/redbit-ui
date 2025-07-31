@@ -2,7 +2,7 @@ import type { OpenAPIV3_1 } from 'openapi-types';
 import { HttpMethod, inlineSchemaWithExample, METHODS, SchemaMap } from './schema';
 import { extractBodyFilterFields } from './streamQuery';
 
-interface ResponseBody {
+export interface ResponseBody {
   schema: OpenAPIV3_1.SchemaObject;
   mediaType: string;
   streaming: boolean;

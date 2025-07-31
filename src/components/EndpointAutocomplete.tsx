@@ -91,7 +91,7 @@ export function EndpointAutocomplete({ endpoints }: EndpointAutocompleteProps) {
   return (
     <div className="flex gap-6">
       {/* Left pane: Autocomplete + filters */}
-      <div className="w-2/5">
+      <div className="flex-none w-64 sticky top-0 self-start">
         <Popover open={open} onOpenChange={setOpen}>
           <PopoverTrigger asChild>
             <Button variant="outline" role="combobox" aria-expanded={open} className="w-full justify-between">
@@ -173,9 +173,10 @@ export function EndpointAutocomplete({ endpoints }: EndpointAutocompleteProps) {
       </div>
 
       {/* Right pane: results */}
-      <div className="flex-1">
+      <div className="flex-1 min-w-0">
         {Object.keys(args).length > 0 && selectedEndpoint && (
           <StreamingTable
+            responseBody={selectedEndpoint.responseBodies[200]!}
             heyClientMethodName={selectedEndpoint.heyClientMethodName}
             args={args}
             onStart={() => setSubmitting(true)}
