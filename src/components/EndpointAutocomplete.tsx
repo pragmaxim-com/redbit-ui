@@ -176,8 +176,7 @@ export function EndpointAutocomplete({ endpoints }: EndpointAutocompleteProps) {
       <div className="flex-1 min-w-0">
         {Object.keys(args).length > 0 && selectedEndpoint && (
           <StreamingTable
-            responseBody={selectedEndpoint.responseBodies[200]!}
-            heyClientMethodName={selectedEndpoint.heyClientMethodName}
+            endpoint={selectedEndpoint}
             args={args}
             onStart={() => setSubmitting(true)}
             onError={(err) => setError(err)}
